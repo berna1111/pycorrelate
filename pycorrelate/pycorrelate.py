@@ -45,7 +45,7 @@ def pnormalize(G, t, u, bins):
 
 
 @numba.jit(nopython=True)
-def pcorrelate(t, u, bins, normalize=False):
+def pcorrelate(t, u, bins, normalize=False, dtype=None):
     """Compute correlation of two arrays of discrete events (Point-process).
 
     The input arrays need to be values of a point process, such as
@@ -65,6 +65,9 @@ def pcorrelate(t, u, bins, normalize=False):
         normalize (bool): if True, normalize the correlation function
             as typically done in FCS using :func:`pnormalize`. If False,
             return the unnormalized correlation function.
+        dtype (class): type of elements in the returned array.
+            If None, it's the type of the sum of the first elements
+            of both arrays `t` and `u`.
 
     Returns:
         Array containing the correlation of `t` and `u`.
@@ -73,10 +76,14 @@ def pcorrelate(t, u, bins, normalize=False):
     See also:
         :func:`make_loglags` to genetate log-spaced lag bins.
     """
+    t, u = np.asanyarray(t), np.asanyarray(u)
     nbins = len(bins) - 1
 
+    if dtype is None:
+        dtype = type(t[0] + u[0])
+
     # Array of counts (histogram)
-    counts = np.zeros(nbins, dtype=np.int64)
+    counts = np.zeros(nbins, dtype=dtype)
 
     # For each bins, imin is the index of first `u` >= of each left bin edge
     imin = np.zeros(nbins, dtype=np.int64)
@@ -115,7 +122,7 @@ def pcorrelate(t, u, bins, normalize=False):
 
 
 @numba.jit
-def ucorrelate(t, u, maxlag=None):
+def ucorrelate(t, u, maxlag=None, dtype=None):
     """Compute correlation of two signals defined at uniformly-spaced points.
 
     The correlation is defined only for positive lags (including zero).
@@ -132,12 +139,14 @@ def ucorrelate(t, u, maxlag=None):
         maxlag (int): number of lags where correlation is computed.
             If None, computes all the lags where signals overlap
             `min(tx.size, tu.size) - 1`.
+        dtype (class): type of elements in the returned array.
+            If None, it's the type of the sum of the first elements
+            of both arrays `t` and `u`.
 
     Returns:
         Array contained the correlation at different lags.
         The size of this array is equal to the input argument `maxlag`
-        (if defined) or to `min(tx.size, tu.size) - 1`, and its `dtype`
-        is the same as argument `t`'s.
+        (if defined) or to `min(tx.size, tu.size) - 1`.
 
     Example:
 
@@ -153,18 +162,14 @@ def ucorrelate(t, u, maxlag=None):
 
             >>> np.correlate(u, t, mode='full')[t.size - 1:]
             array([2, 3, 0])
-            
-        Also works with other types:
-            >>> t = np.array([1.2, 2.4, 0.5, 0.6])
-            >>> u = np.array([0, 1.2, 1.3])
-            >>> pycorrelate.ucorrelate(t, u)
-            array([3.53, 4.56, 1.56])
-            
     """
+    t, u = np.asanyarray(t), np.asanyarray(u)
     if maxlag is None:
         maxlag = u.size
     maxlag = int(min(u.size, maxlag))
-    C = np.empty(maxlag, dtype=t.dtype )
+    if dtype is None:
+        dtype = type(t[0] + u[0])
+    C = np.zeros(maxlag, dtype=dtype)
     for lag in range(C.size):
         tmax = min(u.size - lag, t.size)
         umax = min(u.size, t.size + lag)
@@ -204,3 +209,4 @@ def make_loglags(exp_min, exp_max, points_per_base, base=10):
     num_points = points_per_base * (exp_max - exp_min) + 1
     bins = np.logspace(exp_min, exp_max, num_points, base=base)
     return bins
+
